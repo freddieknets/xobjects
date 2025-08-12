@@ -94,18 +94,12 @@ class JEncoder(json.JSONEncoder):
 
 
 def _build_xofields_dict(bases, data):
+    xofields = {}
+    for bb in bases:
+        if hasattr(bb, "_xofields") and len(bb._xofields.keys()) > 0:
+            xofields.update(bb._xofields.copy())
     if "_xofields" in data.keys():
-        xofields = data["_xofields"].copy()
-    elif any(hasattr(b, "_xofields") for b in bases):
-        n_filled = 0
-        for bb in bases:
-            if hasattr(bb, "_xofields") and len(bb._xofields.keys()) > 0:
-                n_filled += 1
-                if n_filled > 1:
-                    raise ValueError(f"Multiple bases have _xofields: {bases}")
-                xofields = bb._xofields.copy()
-    else:
-        xofields = {}
+        xofields.update(data["_xofields"].copy())
 
     for nn, tt in xofields.items():
         if isclass(tt) and issubclass(tt, HybridClass):
