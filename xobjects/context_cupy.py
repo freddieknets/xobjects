@@ -4,8 +4,11 @@
 # ########################################### #
 
 import logging
-import warnings
-from typing import Dict, List, Tuple
+import os
+import shutil
+import subprocess
+import tempfile
+from typing import Dict, List, Tuple, Literal
 
 import numpy as np
 
@@ -361,7 +364,7 @@ typedef unsigned int       uint32_t; //only_for_context cuda
 typedef unsigned short     uint16_t; //only_for_context cuda
 typedef unsigned char      uint8_t;  //only_for_context cuda
 
-#if defined(__CUDACC__) || defined(__HIPCC_RTC__)
+#if defined(__CUDACC_RTC__) || defined(__HIPCC_RTC__)
 typedef signed long long   int64_t;
 typedef unsigned long long uint64_t;
 #endif
@@ -405,6 +408,7 @@ class ContextCupy(XContext):
         default_block_size=256,
         default_shared_mem_size_bytes=0,
         device=None,
+        backend: Literal[None, "nvrtc", "clang"] = None,
     ):
         if device is not None:
             cupy.cuda.Device(device).use()
@@ -413,6 +417,16 @@ class ContextCupy(XContext):
 
         self.default_block_size = default_block_size
         self.default_shared_mem_size_bytes = default_shared_mem_size_bytes
+
+        if not backend:
+            backend = os.environ.get("XO_CUDA_BACKEND", "nvrtc")
+
+        if backend not in ["nvrtc", "clang"]:
+            raise ValueError(
+                f"Backend {backend} is not supported for the CUDA context. Only nvrtc and clang are allowed."
+            )
+
+        self.backend = backend
 
     def _make_buffer(self, capacity):
         return BufferCupy(capacity=capacity, context=self)
@@ -471,15 +485,23 @@ class ContextCupy(XContext):
             "-DXO_CONTEXT_CUDA",
         )
 
-        if nvrtc and nvrtc.getVersion() >= (12, 9):
-            # If supported, skip prohibitively heavy optimisations (e.g.
-            # involving cloning). This it at the expense of <20%
-            # runtime performance, but gain of a lot of compile time and memory.
-            extra_compile_args += ("--Ofast-compile=min",)
+        if self.backend == "nvrtc":
+            # NVRTC (default): add NVRTC-specific flags
+            nvrtc_args = (*extra_compile_args,)
+            if nvrtc and nvrtc.getVersion() >= (12, 9):
+                # If supported, skip prohibitively heavy optimisations (e.g.
+                # involving cloning). This it at the expense of <20%
+                # runtime performance, but gain of a lot of compile time and memory.
+                nvrtc_args += ("--Ofast-compile=min",)
 
-        module = cupy.RawModule(
-            code=specialized_source, options=extra_compile_args
-        )
+            module = cupy.RawModule(
+                code=specialized_source, options=nvrtc_args
+            )
+        else:
+            # Clang++ backend
+            module = self._build_module_with_clang(
+                specialized_source, extra_compile_args
+            )
 
         out_kernels = {}
         for pyname, kernel in kernel_descriptions.items():
@@ -497,6 +519,72 @@ class ContextCupy(XContext):
             out_kernels[pyname].specialized_source = specialized_source
 
         return out_kernels
+
+    def _find_clang(self):
+        override = os.environ.get("XO_CUDA_CLANG")
+        if override:
+            return override
+
+        found = shutil.which("clang++")
+        if found:
+            return found
+
+        raise RuntimeError(
+            "clang++ for the CUDA context not found. Either install clang so that 'clang++' is on PATH,"
+            "or set the XO_CUDA_CLANG variable to the desired clang++ executable."
+        )
+
+    def _build_module_with_clang(self, source, extra_compile_args=()):
+        clang = self._find_clang()
+        cc = cupy.cuda.Device(cupy.cuda.get_device_id()).compute_capability
+        cuda_include = os.path.join(cupy.cuda.get_cuda_path(), "include")
+
+        # Keep -I and -D flags; skip NVRTC-specific flags (--Ofast-compile etc.)
+        clang_args = [
+            a
+            for a in extra_compile_args
+            if a.startswith(("-I", "-D", "-O", "-std="))
+        ]
+
+        src_fd, src_path = tempfile.mkstemp(suffix=".cu")
+        ptx_fd, ptx_path = tempfile.mkstemp(suffix=".ptx")
+        os.close(src_fd)
+        os.close(ptx_fd)
+        try:
+            with open(src_path, "w") as f:
+                f.write(source)
+
+            cmd = [
+                clang,
+                "-x",
+                "cuda",
+                f"--cuda-gpu-arch=sm_{cc}",
+                "--cuda-device-only",
+                "-S",
+                f"-I{cuda_include}",
+                "-O3",
+                *clang_args,
+                "-o",
+                ptx_path,
+                src_path,
+            ]
+
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"clang CUDA compilation failed:\n{result.stderr}"
+                )
+
+            module = cupy.RawModule(path=ptx_path)
+            # Force the driver to load the PTX now, before we delete the file
+            module.compile()
+        finally:
+            if os.path.exists(src_path):
+                os.unlink(src_path)
+            if os.path.exists(ptx_path):
+                os.unlink(ptx_path)
+
+        return module
 
     def __str__(self):
         return f"{type(self).__name__}:{cupy.cuda.get_device_id()}"

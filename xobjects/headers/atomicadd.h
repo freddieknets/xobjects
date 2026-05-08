@@ -121,8 +121,24 @@ DEF_ATOMIC_ADD(double  , f64)
         typedef unsigned short     uint16_t;
         typedef unsigned int       uint32_t;
     #else
-        // Alternatively, NVCC path is fine with host headers
+        // NVCC and Clang have system headers available
         #include <stdint.h>
+        #if defined(__clang__)
+        // On LP64 Linux, stdint.h maps uint64_t -> unsigned long, but CUDA
+        // atomics only have overloads for unsigned long long.  Provide
+        // transparent forwarding overloads so that atomicCAS/atomicAdd
+        // called with uint64_t* compile and behave correctly.
+        __device__ static inline unsigned long
+        atomicCAS(volatile unsigned long* a, unsigned long c, unsigned long v) {
+            return (unsigned long)atomicCAS((unsigned long long*)(void*)a,
+                                           (unsigned long long)c, (unsigned long long)v);
+        }
+        __device__ static inline unsigned long
+        atomicAdd(volatile unsigned long* a, unsigned long v) {
+            return (unsigned long)atomicAdd((unsigned long long*)(void*)a,
+                                           (unsigned long long)v);
+        }
+        #endif // __clang__
     #endif // __CUDACC_RTC__
     #define GPUVOLATILE    GPUGLMEM
     #define __XT_CAS_U32(ptr, exp, val) atomicCAS((GPUVOLATILE uint32_t*)(ptr), (uint32_t)(exp), (uint32_t)(val))
