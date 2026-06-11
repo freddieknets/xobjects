@@ -518,7 +518,6 @@ class Struct(metaclass=MetaStruct):
         extra_classes=(),
         extra_compile_args=(),
     ):
-
         if context.allow_prebuilt_kernels:
             _print_state = Print.suppress
             Print.suppress = True
@@ -532,6 +531,7 @@ class Struct(metaclass=MetaStruct):
                     config={},
                     tracker_element_classes=[],
                     classes=list(extra_classes) + [cls],
+                    context=context,
                 )
             except ImportError:
                 kernel_info = None
