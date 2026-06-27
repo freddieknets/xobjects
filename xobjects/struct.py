@@ -522,21 +522,42 @@ class Struct(metaclass=MetaStruct):
             _print_state = Print.suppress
             Print.suppress = True
             try:
-                from xsuite import (
-                    get_suitable_kernel,
-                    XSK_PREBUILT_KERNELS_LOCATION,
-                )
+                try:
+                    from xsuite import (
+                        get_suitable_kernel,
+                        XSK_PREBUILT_KERNELS_LOCATION,
+                    )
 
-                kernel_info = get_suitable_kernel(
-                    config={},
-                    tracker_element_classes=[],
-                    classes=list(extra_classes) + [cls],
-                    context=context,
-                )
-            except ImportError:
-                kernel_info = None
+                    kernel_info = get_suitable_kernel(
+                        config={},
+                        tracker_element_classes=[],
+                        classes=list(extra_classes) + [cls],
+                        context=context,
+                    )
+                except ImportError as err:
+                    import os
 
-            Print.suppress = _print_state
+                    from . import context_cpu
+
+                    if (os.environ.get('XSUITE_ALLOW_NO_PREBUILT_KERNELS') is not None
+                            or getattr(context_cpu, 'allow_no_prebuilt_kernel', False)
+                            or getattr(context, 'allow_no_prebuilt_kernel', False)):
+                        kernel_info = None
+                    else:
+                        raise ImportError(
+                            'Xsuite is required to load prebuilt kernels but could '
+                            'not be imported. Please install it with '
+                            '`pip install xsuite`. To allow just-in-time '
+                            'compilation instead, as in previous Xsuite '
+                            'versions (which may require lengthy compilation '
+                            'whenever a different kernel is needed), set the '
+                            'environment variable '
+                            '`XSUITE_ALLOW_NO_PREBUILT_KERNELS`, set '
+                            '`xobjects.context_cpu.allow_no_prebuilt_kernel = True`, '
+                            'or set `context.allow_no_prebuilt_kernel = True`.'
+                        ) from err
+            finally:
+                Print.suppress = _print_state
             if kernel_info:
                 kernels = context.kernels_from_file(
                     module_name=kernel_info["module_name"],

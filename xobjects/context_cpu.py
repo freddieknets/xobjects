@@ -19,6 +19,7 @@ import scipy as sp
 
 _forbid_compile = False
 _suppress_warnings = False
+allow_no_prebuilt_kernel = False
 
 from .context import (
     Kernel,
