@@ -535,26 +535,16 @@ class Struct(metaclass=MetaStruct):
                         context=context,
                     )
                 except ImportError as err:
-                    import os
-
                     from . import context_cpu
 
-                    if (os.environ.get('XSUITE_ALLOW_NO_PREBUILT_KERNELS') is not None
-                            or getattr(context_cpu, 'allow_no_prebuilt_kernel', False)
-                            or getattr(context, 'allow_no_prebuilt_kernel', False)):
+                    if context_cpu.allow_no_prebuilt_kernel_enabled(context):
                         kernel_info = None
                     else:
                         raise ImportError(
                             'Xsuite is required to load prebuilt kernels but could '
                             'not be imported. Please install it with '
-                            '`pip install xsuite`. To allow just-in-time '
-                            'compilation instead, as in previous Xsuite '
-                            'versions (which may require lengthy compilation '
-                            'whenever a different kernel is needed), set the '
-                            'environment variable '
-                            '`XSUITE_ALLOW_NO_PREBUILT_KERNELS`, set '
-                            '`xobjects.context_cpu.allow_no_prebuilt_kernel = True`, '
-                            'or set `context.allow_no_prebuilt_kernel = True`.'
+                            f'`pip install xsuite`. '
+                            f'{context_cpu.no_prebuilt_kernel_jit_message()}'
                         ) from err
             finally:
                 Print.suppress = _print_state

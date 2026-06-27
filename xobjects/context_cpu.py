@@ -21,6 +21,26 @@ _forbid_compile = False
 _suppress_warnings = False
 allow_no_prebuilt_kernel = False
 
+
+def allow_no_prebuilt_kernel_enabled(context=None):
+    if os.environ.get('XSUITE_ALLOW_NO_PREBUILT_KERNELS') is not None:
+        return True
+    if allow_no_prebuilt_kernel:
+        return True
+    return getattr(context, 'allow_no_prebuilt_kernel', False)
+
+
+def no_prebuilt_kernel_jit_message():
+    return (
+        'To allow just-in-time compilation instead, as in older Xsuite '
+        'versions, set the environment variable '
+        '`XSUITE_ALLOW_NO_PREBUILT_KERNELS`, set '
+        '`xobjects.context_cpu.allow_no_prebuilt_kernel = True`, or set '
+        '`context.allow_no_prebuilt_kernel = True`. This may require lengthy '
+        'compilation whenever a different kernel is needed.'
+    )
+
+
 from .context import (
     Kernel,
     ModuleNotAvailable,
