@@ -30,6 +30,19 @@ def allow_no_prebuilt_kernel_enabled(context=None):
     return getattr(context, 'allow_no_prebuilt_kernel', False)
 
 
+def _is_serial_cpu_context(context):
+    if context is None or not hasattr(context, 'openmp_enabled'):
+        return False
+    return context.openmp_enabled is False
+
+
+def require_prebuilt_kernel(context=None):
+    return (
+        not allow_no_prebuilt_kernel_enabled(context)
+        and _is_serial_cpu_context(context)
+    )
+
+
 def no_prebuilt_kernel_jit_message():
     return (
         'To allow just-in-time compilation instead, as in older Xsuite '
