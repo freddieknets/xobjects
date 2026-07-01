@@ -537,7 +537,8 @@ class Struct(metaclass=MetaStruct):
                 except ImportError as err:
                     from . import context_cpu
 
-                    if not context_cpu.require_prebuilt_kernel(context):
+                    if not context_cpu.require_prebuilt_kernel(
+                            context, classes=list(extra_classes) + [cls]):
                         kernel_info = None
                     else:
                         raise ImportError(

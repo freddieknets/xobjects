@@ -22,10 +22,27 @@ _suppress_warnings = False
 allow_no_prebuilt_kernel = False
 
 
-def allow_no_prebuilt_kernel_enabled(context=None):
+def _class_allows_no_prebuilt_kernel(cls):
+    return (
+        getattr(cls, 'allow_no_prebuilt_kernel', False)
+        or getattr(getattr(cls, '_DressingClass', None),
+                   'allow_no_prebuilt_kernel', False)
+        or getattr(getattr(cls, '_XoStruct', None),
+                   'allow_no_prebuilt_kernel', False)
+    )
+
+
+def allow_no_prebuilt_kernel_enabled(context=None, classes=()):
+    if classes is None:
+        classes = ()
+    elif isinstance(classes, type):
+        classes = (classes,)
+
     if os.environ.get('XSUITE_ALLOW_NO_PREBUILT_KERNELS') is not None:
         return True
     if allow_no_prebuilt_kernel:
+        return True
+    if any(_class_allows_no_prebuilt_kernel(cls) for cls in classes):
         return True
     return getattr(context, 'allow_no_prebuilt_kernel', False)
 
@@ -36,9 +53,9 @@ def _is_serial_cpu_context(context):
     return context.openmp_enabled is False
 
 
-def require_prebuilt_kernel(context=None):
+def require_prebuilt_kernel(context=None, classes=()):
     return (
-        not allow_no_prebuilt_kernel_enabled(context)
+        not allow_no_prebuilt_kernel_enabled(context, classes=classes)
         and _is_serial_cpu_context(context)
     )
 
@@ -49,8 +66,11 @@ def no_prebuilt_kernel_jit_message():
         'versions, set the environment variable '
         '`XSUITE_ALLOW_NO_PREBUILT_KERNELS`, set '
         '`xobjects.context_cpu.allow_no_prebuilt_kernel = True`, or set '
-        '`context.allow_no_prebuilt_kernel = True`. This may require lengthy '
-        'compilation whenever a different kernel is needed.'
+        '`context.allow_no_prebuilt_kernel = True`. Classes that require '
+        'just-in-time compilation can also define '
+        '`allow_no_prebuilt_kernel = True` as a class attribute. Using '
+        'just-in-time compilation instead of prebuilt kernels may require '
+        'lengthy compilation whenever a different kernel is needed.'
     )
 
 
