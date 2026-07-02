@@ -374,6 +374,36 @@ class XContext(ABC):
             sources.append(str(path))
         return sources
 
+    def get_installed_c_source_and_library_paths(self) -> List[str]:
+        """Returns a list of library paths registered in dependent packages.
+
+        In a package that depends on xobjects, you can register C library
+        paths. This path, relative to the module, will be added to the
+        library path when building kernels. For example, the following will
+        allow to use functions from the library ``xcoll/lib/shared_lib.so``:
+
+         .. code-block:: toml
+            [project.entry-points.xobjects]
+            libs = "FlukaIO"
+            lib_paths = "xcoll/lib"
+        """
+        libs = []
+        lib_paths = []
+        sources = []
+        for ep in entry_points(group="xobjects", name="build_info"):
+            get_build_info = ep.load()
+            info = get_build_info()
+
+            include_dirs = info.get("include_dirs", [])
+            libraries = info.get("libraries", [])
+            library_dirs = info.get("library_dirs", [])
+        for ep in entry_points(group="xobjects", name="lib_paths"):
+            module = ep.load()
+            module_path = Path(module.__file__).parent
+            .parents[1]
+            libs.append(str(path))
+        return libs
+
     @abstractmethod
     def nparray_to_context_array(self, arr, copy=False):
         """Obtain an array on the context, given a numpy array.
