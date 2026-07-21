@@ -522,21 +522,33 @@ class Struct(metaclass=MetaStruct):
             _print_state = Print.suppress
             Print.suppress = True
             try:
-                from xsuite import (
-                    get_suitable_kernel,
-                    XSK_PREBUILT_KERNELS_LOCATION,
-                )
+                try:
+                    from xsuite import (
+                        get_suitable_kernel,
+                        XSK_PREBUILT_KERNELS_LOCATION,
+                    )
 
-                kernel_info = get_suitable_kernel(
-                    config={},
-                    tracker_element_classes=[],
-                    classes=list(extra_classes) + [cls],
-                    context=context,
-                )
-            except ImportError:
-                kernel_info = None
+                    kernel_info = get_suitable_kernel(
+                        config={},
+                        tracker_element_classes=[],
+                        classes=list(extra_classes) + [cls],
+                        context=context,
+                    )
+                except ImportError as err:
+                    from . import context_cpu
 
-            Print.suppress = _print_state
+                    if not context_cpu.require_prebuilt_kernel(
+                            context, classes=list(extra_classes) + [cls]):
+                        kernel_info = None
+                    else:
+                        raise ImportError(
+                            'Xsuite is required to load prebuilt kernels but could '
+                            'not be imported. Please install it with '
+                            f'`pip install xsuite`. '
+                            f'{context_cpu.no_prebuilt_kernel_jit_message()}'
+                        ) from err
+            finally:
+                Print.suppress = _print_state
             if kernel_info:
                 kernels = context.kernels_from_file(
                     module_name=kernel_info["module_name"],
