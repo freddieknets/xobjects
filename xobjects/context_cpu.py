@@ -505,10 +505,10 @@ class ContextCpu(XContext):
                          for path in extra_include_paths]
         xtr_compile_args.extend(include_flags)
         xtr_link_args.extend(include_flags)
-        library_flags = [f"-L{path.as_posix()}"
-                         for path in extra_library_paths]
+        library_folders = [f"-L{path.as_posix()}"
+                           for path in extra_library_folders]
+        library_flags = [f"-l{lib}" for lib in extra_library_paths]
         xtr_link_args.extend(library_flags)
-        library_folders = [f"-l{lib}" for lib in extra_library_folders]
         xtr_link_args.extend(library_folders)
 
         if os.name == "nt":  # windows
