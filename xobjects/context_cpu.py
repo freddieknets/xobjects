@@ -442,10 +442,20 @@ class ContextCpu(XContext):
             xtr_compile_args.append("-DXO_CONTEXT_CPU_SERIAL")
             xtr_link_args.append("-DXO_CONTEXT_CPU_SERIAL")
 
-        extra_include_paths = self.get_installed_c_source_paths()
-        include_flags = [f"-I{path}" for path in extra_include_paths]
+        (
+            extra_include_paths,
+            extra_library_paths,
+            extra_library_folders,
+        ) = self.get_installed_c_source_and_library_paths()
+        include_flags = [f"-I{path.as_posix()}"
+                         for path in extra_include_paths]
         xtr_compile_args.extend(include_flags)
         xtr_link_args.extend(include_flags)
+        library_flags = [f"-L{path.as_posix()}"
+                         for path in extra_library_paths]
+        xtr_link_args.extend(library_flags)
+        library_folders = [f"-l{lib}" for lib in extra_library_folders]
+        xtr_link_args.extend(library_folders)
 
         if os.name == "nt":  # windows
             # TODO: to be handled properly
@@ -456,6 +466,8 @@ class ContextCpu(XContext):
             xtr_compile_args.append("-w")
             xtr_link_args.append("-w")
 
+        print(f"{xtr_compile_args=}")
+        print(f"{xtr_link_args=}")
         ffi_interface.set_source(
             module_name,
             specialized_source,
