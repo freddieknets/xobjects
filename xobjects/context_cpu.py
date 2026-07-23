@@ -24,11 +24,15 @@ allow_no_prebuilt_kernel = False
 
 def _class_allows_no_prebuilt_kernel(cls):
     return (
-        getattr(cls, 'allow_no_prebuilt_kernel', False)
-        or getattr(getattr(cls, '_DressingClass', None),
-                   'allow_no_prebuilt_kernel', False)
-        or getattr(getattr(cls, '_XoStruct', None),
-                   'allow_no_prebuilt_kernel', False)
+        getattr(cls, "allow_no_prebuilt_kernel", False)
+        or getattr(
+            getattr(cls, "_DressingClass", None),
+            "allow_no_prebuilt_kernel",
+            False,
+        )
+        or getattr(
+            getattr(cls, "_XoStruct", None), "allow_no_prebuilt_kernel", False
+        )
     )
 
 
@@ -38,39 +42,38 @@ def allow_no_prebuilt_kernel_enabled(context=None, classes=()):
     elif isinstance(classes, type):
         classes = (classes,)
 
-    if os.environ.get('XSUITE_ALLOW_NO_PREBUILT_KERNELS') is not None:
+    if os.environ.get("XSUITE_ALLOW_NO_PREBUILT_KERNELS") is not None:
         return True
     if allow_no_prebuilt_kernel:
         return True
     if any(_class_allows_no_prebuilt_kernel(cls) for cls in classes):
         return True
-    return getattr(context, 'allow_no_prebuilt_kernel', False)
+    return getattr(context, "allow_no_prebuilt_kernel", False)
 
 
 def _is_serial_cpu_context(context):
-    if context is None or not hasattr(context, 'openmp_enabled'):
+    if context is None or not hasattr(context, "openmp_enabled"):
         return False
     return context.openmp_enabled is False
 
 
 def require_prebuilt_kernel(context=None, classes=()):
-    return (
-        not allow_no_prebuilt_kernel_enabled(context, classes=classes)
-        and _is_serial_cpu_context(context)
-    )
+    return not allow_no_prebuilt_kernel_enabled(
+        context, classes=classes
+    ) and _is_serial_cpu_context(context)
 
 
 def no_prebuilt_kernel_jit_message():
     return (
-        'To allow just-in-time compilation instead, as in older Xsuite '
-        'versions, set the environment variable '
-        '`XSUITE_ALLOW_NO_PREBUILT_KERNELS`, set '
-        '`xobjects.context_cpu.allow_no_prebuilt_kernel = True`, or set '
-        '`context.allow_no_prebuilt_kernel = True`. Classes that require '
-        'just-in-time compilation can also define '
-        '`allow_no_prebuilt_kernel = True` as a class attribute. Using '
-        'just-in-time compilation instead of prebuilt kernels may require '
-        'lengthy compilation whenever a different kernel is needed.'
+        "To allow just-in-time compilation instead, as in older Xsuite "
+        "versions, set the environment variable "
+        "`XSUITE_ALLOW_NO_PREBUILT_KERNELS`, set "
+        "`xobjects.context_cpu.allow_no_prebuilt_kernel = True`, or set "
+        "`context.allow_no_prebuilt_kernel = True`. Classes that require "
+        "just-in-time compilation can also define "
+        "`allow_no_prebuilt_kernel = True` as a class attribute. Using "
+        "just-in-time compilation instead of prebuilt kernels may require "
+        "lengthy compilation whenever a different kernel is needed."
     )
 
 
@@ -498,18 +501,9 @@ class ContextCpu(XContext):
 
         (
             extra_include_paths,
+            extra_libraries,
             extra_library_paths,
-            extra_library_folders,
         ) = self.get_installed_c_source_and_library_paths()
-        include_flags = [f"-I{path.as_posix()}"
-                         for path in extra_include_paths]
-        xtr_compile_args.extend(include_flags)
-        xtr_link_args.extend(include_flags)
-        library_folders = [f"-L{path.as_posix()}"
-                           for path in extra_library_folders]
-        library_flags = [f"-l{lib}" for lib in extra_library_paths]
-        xtr_link_args.extend(library_flags)
-        xtr_link_args.extend(library_folders)
 
         if os.name == "nt":  # windows
             # TODO: to be handled properly
@@ -520,11 +514,12 @@ class ContextCpu(XContext):
             xtr_compile_args.append("-w")
             xtr_link_args.append("-w")
 
-        print(f"{xtr_compile_args=}")
-        print(f"{xtr_link_args=}")
         ffi_interface.set_source(
             module_name,
             specialized_source,
+            include_dirs=[path.as_posix() for path in extra_include_paths],
+            libraries=list(extra_libraries),
+            library_dirs=[path.as_posix() for path in extra_library_paths],
             extra_compile_args=xtr_compile_args,
             extra_link_args=xtr_link_args,
         )
