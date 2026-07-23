@@ -354,7 +354,9 @@ class XContext(ABC):
     ) -> Dict[Tuple[str, tuple], KernelType]:
         pass
 
-    def get_installed_c_source_and_library_paths(self) -> List[str]:
+    def get_installed_c_source_and_library_paths(
+        self,
+    ) -> tuple[set[Path], set[str], set[Path]]:
         """Returns a list of C paths registered in dependent packages.
 
         In a package that depends on xobjects, you can register C source and
@@ -394,49 +396,33 @@ class XContext(ABC):
             get_build_info = ep.load()
             info = get_build_info()
             include_dirs = info.get("include_dirs", [])
-            if not hasattr(include_dirs, "__iter__") \
-            or isinstance(include_dirs, str):
+            if not hasattr(include_dirs, "__iter__") or isinstance(
+                include_dirs, str
+            ):
                 include_dirs = [include_dirs]
-            include_dirs = [Path(dd).expanduser().resolve()
-                            for dd in include_dirs]
+            include_dirs = [
+                Path(dd).expanduser().resolve() for dd in include_dirs
+            ]
             sources.update(include_dirs)
 
             library_dirs = info.get("library_dirs", [])
-            if not hasattr(library_dirs, "__iter__") \
-            or isinstance(library_dirs, str):
+            if not hasattr(library_dirs, "__iter__") or isinstance(
+                library_dirs, str
+            ):
                 library_dirs = [library_dirs]
-            library_dirs = [Path(dd).expanduser().resolve()
-                            for dd in library_dirs]
+            library_dirs = [
+                Path(dd).expanduser().resolve() for dd in library_dirs
+            ]
             lib_paths.update(library_dirs)
 
             libraries = info.get("libraries", [])
-            if not hasattr(libraries, "__iter__") \
-            or isinstance(libraries, str):
+            if not hasattr(libraries, "__iter__") or isinstance(
+                libraries, str
+            ):
                 libraries = [libraries]
             libs.update(libraries)
 
-        # Only add existing libraries
-        final_lib_paths = set()
-        for lib in list(libs):
-            found = False
-            for lib_path in lib_paths:
-                if (lib_path / f"lib{lib}.a").exists() \
-                or (lib_path / f"lib{lib}.so").exists() \
-                or (lib_path / f"lib{lib}.dylib").exists() \
-                or (lib_path / f"{lib}.dll").exists() \
-                or (lib_path / f"{lib}.dll.a").exists() \
-                or (lib_path / f"{lib}.lib").exists():
-                    found = True
-                    final_lib_paths.add(lib_path)
-                    break
-            if not found:
-                log.warning(
-                    f"Library {lib} not found in any of the library paths: "
-                    f"{lib_paths}. It will be ignored."
-                )
-                libs.remove(lib)
-
-        return sources, libs, final_lib_paths
+        return sources, libs, lib_paths
 
     @abstractmethod
     def nparray_to_context_array(self, arr, copy=False):
