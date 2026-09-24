@@ -467,7 +467,7 @@ class ContextCupy(XContext):
                 "such as 90 or 120."
             )
 
-        self.cuda_arch = cuda_compute_capability
+        self.cuda_compute_capability = cuda_compute_capability
 
     def _make_buffer(self, capacity):
         return BufferCupy(capacity=capacity, context=self)
@@ -549,7 +549,7 @@ class ContextCupy(XContext):
                     "Compilation time and memory usage might be high: if this is a problem, please update CUDA nvrtc."
                 )
 
-            if self.cuda_arch is None:
+            if self.cuda_compute_capability is None:
                 module = cupy.RawModule(
                     code=specialized_source,
                     options=nvrtc_args,
@@ -608,7 +608,7 @@ class ContextCupy(XContext):
 
         options += (
             "-ftz=true",
-            f"-arch=compute_{self.cuda_arch}",
+            f"-arch=compute_{self.cuda_compute_capability}",
             "--device-as-default-execution-space",
         )
 
@@ -625,7 +625,7 @@ class ContextCupy(XContext):
         except nvrtc.NVRTCError as err:
             log = nvrtc.getProgramLog(program)
             raise RuntimeError(
-                f"NVRTC compilation failed for compute_{self.cuda_arch}:\n"
+                f"NVRTC compilation failed for compute_{self.cuda_compute_capability}:\n"
                 f"{log}"
             ) from err
         finally:
@@ -652,7 +652,7 @@ class ContextCupy(XContext):
 
     def _build_module_with_clang(self, source, extra_compile_args=()):
         clang = self._find_clang()
-        cc = self.cuda_arch
+        cc = self.cuda_compute_capability
         if cc is None:
             cc = cupy.cuda.Device(cupy.cuda.get_device_id()).compute_capability
         cuda_include = os.path.join(cupy.cuda.get_cuda_path(), "include")
