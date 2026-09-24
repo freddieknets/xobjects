@@ -454,23 +454,18 @@ class ContextCupy(XContext):
             )
 
         self.backend = backend
-        if cuda_compute_capability is not None:
-            cuda_compute_capability = str(cuda_compute_capability)
 
-            if cuda_compute_capability.startswith("compute_"):
-                cuda_compute_capability = cuda_compute_capability.removeprefix(
-                    "compute_"
-                )
-            elif cuda_compute_capability.startswith("sm_"):
-                cuda_compute_capability = cuda_compute_capability.removeprefix(
-                    "sm_"
-                )
+        if cuda_compute_capability is None:
+            cuda_compute_capability = settings.cuda_compute_capability
 
-            if not cuda_compute_capability.isdigit():
-                raise ValueError(
-                    f"Invalid CUDA architecture {cuda_compute_capability!r}. "
-                    "Expected e.g. 90, '90', 'compute_90', or 'sm_90'."
-                )
+        if cuda_compute_capability is not None and (
+            not isinstance(cuda_compute_capability, int)
+            or cuda_compute_capability <= 0
+        ):
+            raise ValueError(
+                "cuda_compute_capability must be a positive integer "
+                "such as 90 or 120."
+            )
 
         self.cuda_arch = cuda_compute_capability
 
