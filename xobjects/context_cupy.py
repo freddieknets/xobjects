@@ -46,6 +46,7 @@ try:
     import cupyx.scipy.stats
     from cupyx.scipy import fftpack as cufftp
     from cupy_backends.cuda.libs import nvrtc
+    from cupy._core import core as cupy_core
 
     _enabled = True
 except ImportError:
@@ -402,10 +403,19 @@ class ContextCupy(XContext):
     environment variable ``XSUITE_CUDA_FAST_COMPILE=0``, to disable it.
 
     Args:
-        default_block_size (int):  CUDA thread size that is used by default
+        default_block_size (int):
+            CUDA thread size that is used by default
             for kernel execution in case a block size is not specified
             directly in the kernel object. The default value is 256.
-        device (int): Identifier of the device to be used by the context.
+        device (int):
+            Identifier of the device to be used by the context.
+        cuda_compute_capability (int or str, optional):
+            CUDA virtual architecture used for kernel compilation. If omitted,
+            the architecture is selected automatically from the active GPU.
+            When specified, kernels are compiled to PTX for the requested
+            compute capability and JIT-compiled by the CUDA driver for the
+            actual device. For example, ``cuda_compute_capability=90`` targets
+            ``compute_90``.
     Returns:
         ContextCupy: context object.
 
@@ -425,6 +435,7 @@ class ContextCupy(XContext):
         default_shared_mem_size_bytes=0,
         device=None,
         backend: Literal[None, "nvrtc", "clang"] = None,
+        cuda_compute_capability=None,
     ):
         if device is not None:
             cupy.cuda.Device(device).use()
@@ -443,6 +454,25 @@ class ContextCupy(XContext):
             )
 
         self.backend = backend
+        if cuda_compute_capability is not None:
+            cuda_compute_capability = str(cuda_compute_capability)
+
+            if cuda_compute_capability.startswith("compute_"):
+                cuda_compute_capability = cuda_compute_capability.removeprefix(
+                    "compute_"
+                )
+            elif cuda_compute_capability.startswith("sm_"):
+                cuda_compute_capability = cuda_compute_capability.removeprefix(
+                    "sm_"
+                )
+
+            if not cuda_compute_capability.isdigit():
+                raise ValueError(
+                    f"Invalid CUDA architecture {cuda_compute_capability!r}. "
+                    "Expected e.g. 90, '90', 'compute_90', or 'sm_90'."
+                )
+
+        self.cuda_arch = cuda_compute_capability
 
     def _make_buffer(self, capacity):
         return BufferCupy(capacity=capacity, context=self)
@@ -524,9 +554,17 @@ class ContextCupy(XContext):
                     "Compilation time and memory usage might be high: if this is a problem, please update CUDA nvrtc."
                 )
 
-            module = cupy.RawModule(
-                code=specialized_source, options=nvrtc_args
-            )
+            if self.cuda_arch is None:
+                module = cupy.RawModule(
+                    code=specialized_source,
+                    options=nvrtc_args,
+                )
+            else:
+                module = self._build_module_with_nvrtc(
+                    specialized_source,
+                    nvrtc_args,
+                )
+
         else:
             # Clang++ backend
             module = self._build_module_with_clang(
@@ -567,9 +605,61 @@ class ContextCupy(XContext):
             "executable."
         )
 
+    def _build_module_with_nvrtc(self, source, extra_compile_args=()):
+        # Match the include paths/options that CuPy normally adds for RawModule.
+        options = cupy_core.assemble_cupy_compiler_options(
+            tuple(extra_compile_args)
+        )
+
+        options += (
+            "-ftz=true",
+            f"-arch=compute_{self.cuda_arch}",
+            "--device-as-default-execution-space",
+        )
+
+        program = nvrtc.createProgram(
+            source,
+            "xobjects.cu",
+            (),
+            (),
+        )
+
+        try:
+            nvrtc.compileProgram(program, options)
+            ptx = nvrtc.getPTX(program)
+        except nvrtc.NVRTCError as err:
+            log = nvrtc.getProgramLog(program)
+            raise RuntimeError(
+                f"NVRTC compilation failed for compute_{self.cuda_arch}:\n"
+                f"{log}"
+            ) from err
+        finally:
+            nvrtc.destroyProgram(program)
+
+        # RawModule(path=...) gives us the same interface currently used by
+        # KernelCupy, while the CUDA driver JITs the PTX for the actual GPU.
+        fd, ptx_path = tempfile.mkstemp(suffix=".ptx")
+        os.close(fd)
+
+        try:
+            with open(ptx_path, "wb") as fid:
+                fid.write(ptx)
+
+            module = cupy.RawModule(path=ptx_path)
+
+            # Force loading/JIT before deleting the temporary PTX.
+            module.compile()
+        finally:
+            if os.path.exists(ptx_path):
+                os.unlink(ptx_path)
+
+        return module
+
     def _build_module_with_clang(self, source, extra_compile_args=()):
         clang = self._find_clang()
-        cc = cupy.cuda.Device(cupy.cuda.get_device_id()).compute_capability
+        cc = self.cuda_arch
+        if cc is None:
+            cc = cupy.cuda.Device(cupy.cuda.get_device_id()).compute_capability
         cuda_include = os.path.join(cupy.cuda.get_cuda_path(), "include")
 
         # Keep -I and -D flags; skip NVRTC-specific flags (--Ofast-compile etc.)
