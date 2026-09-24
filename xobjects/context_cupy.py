@@ -409,7 +409,7 @@ class ContextCupy(XContext):
             directly in the kernel object. The default value is 256.
         device (int):
             Identifier of the device to be used by the context.
-        cuda_compute_capability (int or str, optional):
+        cuda_compute_capability (int, optional):
             CUDA virtual architecture used for kernel compilation. If omitted,
             the architecture is selected automatically from the active GPU.
             When specified, kernels are compiled to PTX for the requested
@@ -555,7 +555,7 @@ class ContextCupy(XContext):
                     options=nvrtc_args,
                 )
             else:
-                module = self._build_module_with_nvrtc(
+                module = self._build_module_with_nvrtc_ptx(
                     specialized_source,
                     nvrtc_args,
                 )
@@ -600,7 +600,7 @@ class ContextCupy(XContext):
             "executable."
         )
 
-    def _build_module_with_nvrtc(self, source, extra_compile_args=()):
+    def _build_module_with_nvrtc_ptx(self, source, extra_compile_args=()):
         # Match the include paths/options that CuPy normally adds for RawModule.
         options = cupy_core.assemble_cupy_compiler_options(
             tuple(extra_compile_args)

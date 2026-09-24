@@ -52,9 +52,9 @@ class Settings:
         Selects the clang++ executable used by the CUDA clang backend.
 
     ``cuda_compute_capability`` — ``XSUITE_CUDA_COMPUTE_CAPABILITY``
-    Values: ``None`` (default), integer compute capability such as ``90``
-    Selects the CUDA virtual architecture used for PTX compilation.
-    If unset, the compute capability is inferred from the active GPU.
+        Values: ``None`` (default), integer compute capability such as ``90``
+        Selects the CUDA virtual architecture used for PTX compilation.
+        If unset, the compute capability is inferred from the active GPU.
 
     Notes
     -----
