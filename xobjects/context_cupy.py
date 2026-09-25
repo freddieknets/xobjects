@@ -47,6 +47,7 @@ try:
     from cupyx.scipy import fftpack as cufftp
     from cupy_backends.cuda.libs import nvrtc
     from cupy._core import core as cupy_core
+    from cupy.cuda import function as cupy_function
 
     _enabled = True
 except ImportError:
@@ -631,22 +632,8 @@ class ContextCupy(XContext):
         finally:
             nvrtc.destroyProgram(program)
 
-        # RawModule(path=...) gives us the same interface currently used by
-        # KernelCupy, while the CUDA driver JITs the PTX for the actual GPU.
-        fd, ptx_path = tempfile.mkstemp(suffix=".ptx")
-        os.close(fd)
-
-        try:
-            with open(ptx_path, "wb") as fid:
-                fid.write(ptx)
-
-            module = cupy.RawModule(path=ptx_path)
-
-            # Force loading/JIT before deleting the temporary PTX.
-            module.compile()
-        finally:
-            if os.path.exists(ptx_path):
-                os.unlink(ptx_path)
+        module = cupy_function.Module()
+        module.load(ptx)
 
         return module
 
@@ -693,9 +680,14 @@ class ContextCupy(XContext):
                     f"clang CUDA compilation failed:\n{result.stderr}"
                 )
 
-            module = cupy.RawModule(path=ptx_path)
-            # Force the driver to load the PTX now, before we delete the file
-            module.compile()
+            # Load the generated PTX directly. Avoid RawModule(path=...)
+            # because its memoisation key contains the temporary filename.
+            with open(ptx_path, "rb") as fid:
+                ptx = fid.read()
+
+            module = cupy_function.Module()
+            module.load(ptx)
+
         finally:
             if os.path.exists(src_path):
                 os.unlink(src_path)
