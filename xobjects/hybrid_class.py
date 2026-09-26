@@ -286,9 +286,10 @@ class HybridClass(metaclass=MetaHybridClass):
         # (for example in case object is initialized from dict)
         self._reinit_from_xobject(_xobject=self._xobject)
 
+        self._on_context_change(old_context=None, new_context=self._context)
+
     def __init__(self, _xobject=None, **kwargs):
         self.xoinitialize(_xobject=_xobject, **kwargs)
-        self._on_context_change(old_context=None, new_context=self._context)
 
     def to_dict(self, copy_to_cpu=True):
         out = {"__class__": self.__class__.__name__}
