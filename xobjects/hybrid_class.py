@@ -224,10 +224,7 @@ class HybridClass(metaclass=MetaHybridClass):
 
         new_context = self._context
         if new_context is not old_context:
-            self._on_context_change(
-                old_context=old_context,
-                new_context=new_context,
-            )
+            self._on_context_change(old_context, new_context)
 
     @property
     def _move_to(self):
@@ -265,6 +262,7 @@ class HybridClass(metaclass=MetaHybridClass):
 
         if _xobject is not None:
             self._reinit_from_xobject(_xobject=_xobject)
+            self._on_context_change(None, self._context)
             return
 
         # Handle dressed inputs
@@ -286,7 +284,7 @@ class HybridClass(metaclass=MetaHybridClass):
         # (for example in case object is initialized from dict)
         self._reinit_from_xobject(_xobject=self._xobject)
 
-        self._on_context_change(old_context=None, new_context=self._context)
+        self._on_context_change(None, self._context)
 
     def __init__(self, _xobject=None, **kwargs):
         self.xoinitialize(_xobject=_xobject, **kwargs)
@@ -348,7 +346,7 @@ class HybridClass(metaclass=MetaHybridClass):
         )
 
     def copy(self, _context=None, _buffer=None, _offset=None):
-        old_context = self._context
+        old_context = self._xobject._buffer.context
         if _context is None and _buffer is None:
             _context = old_context
         # This makes a copy of the xobject
@@ -366,10 +364,7 @@ class HybridClass(metaclass=MetaHybridClass):
 
         new_context = new._context
         if new_context is not old_context:
-            new._on_context_change(
-                old_context=old_context,
-                new_context=new_context,
-            )
+            new._on_context_change(old_context, new_context)
         return new
 
     @property
@@ -392,10 +387,7 @@ class HybridClass(metaclass=MetaHybridClass):
             buffer=state[0], offset=state[1]
         )
         self._reinit_from_xobject(_xobject=self._xobject)
-        self._on_context_change(
-            old_context=None,
-            new_context=self._context,
-        )
+        self._on_context_change(None, self._context)
 
     @property
     def XoStruct(self):
